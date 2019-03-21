@@ -9,23 +9,43 @@ dotenv](https://github.com/bkeepers/dotenv).
 
 [![Build Status](https://travis-ci.org/vlucas/phpdotenv.svg?branch=master)](https://travis-ci.org/vlucas/phpdotenv)
 
+
+UPGRADING FROM V2
+-----------------
+
+New in Version 3 is first-class support for multiline variables
+([#301](https://github.com/vlucas/phpdotenv/pull/301)) and much more
+flexibility in terms of which parts of the environment we try to read and
+modify ([#300](https://github.com/vlucas/phpdotenv/pull/300)). Consequently,
+you will need to replace any occurrences of `new Dotenv(...)` with
+`Dotenv::create(...)`, since our new native constructor takes a `Loader`
+instance now, so that it can be truly customized if required. Finally, one
+should note that the loader will no longer be trimming values
+([#302](https://github.com/vlucas/phpdotenv/pull/302)), moreover
+`Loader::load()` and its callers now return an associative array of the
+variables loaded with their values, rather than an array of raw lines from the
+environment file ([#306](https://github.com/vlucas/phpdotenv/pull/306)).
+
+For more details, please see the
+[release notes](https://github.com/vlucas/phpdotenv/releases/tag/v3.0.0) and the [upgrading guide](UPGRADING.md).
+
+
 Why .env?
 ---------
 **You should never store sensitive credentials in your code**. Storing
 [configuration in the environment](http://www.12factor.net/config) is one of
 the tenets of a [twelve-factor app](http://www.12factor.net/). Anything that is
 likely to change between deployment environments – such as database credentials
-or credentials for 3rd party services – should be extracted from the
-code into environment variables.
+or credentials for 3rd party services – should be extracted from the code into
+environment variables.
 
-Basically, a `.env` file is an easy way to load custom configuration
-variables that your application needs without having to modify .htaccess
-files or Apache/nginx virtual hosts. This means you won't have to edit
-any files outside the project, and all the environment variables are
-always set no matter how you run your project - Apache, Nginx, CLI, and
-even PHP 5.4's built-in webserver. It's WAY easier than all the other
-ways you know of to set environment variables, and you're going to love
-it.
+Basically, a `.env` file is an easy way to load custom configuration variables
+that your application needs without having to modify .htaccess files or
+Apache/nginx virtual hosts. This means you won't have to edit any files outside
+the project, and all the environment variables are always set no matter how you
+run your project - Apache, Nginx, CLI, and even PHP 5.4's built-in webserver.
+It's WAY easier than all the other ways you know of to set environment
+variables, and you're going to love it!
 
 * NO editing virtual hosts in Apache or Nginx
 * NO adding `php_value` flags to .htaccess files
@@ -41,6 +61,11 @@ curl -s http://getcomposer.org/installer | php
 php composer.phar require vlucas/phpdotenv
 ```
 
+Or on Existing projects
+
+```shell
+composer require vlucas/phpdotenv
+```
 Usage
 -----
 The `.env` file is generally kept out of version control since it can contain
@@ -79,14 +104,14 @@ SECRET_KEY="abc123"
 You can then load `.env` in your application with:
 
 ```php
-$dotenv = new Dotenv\Dotenv(__DIR__);
+$dotenv = Dotenv\Dotenv::create(__DIR__);
 $dotenv->load();
 ```
 
 Optionally you can pass in a filename as the second parameter, if you would like to use something other than `.env`
 
 ```php
-$dotenv = new Dotenv\Dotenv(__DIR__, 'myconfig');
+$dotenv = Dotenv\Dotenv::create(__DIR__, 'myconfig');
 $dotenv->load();
 ```
 
@@ -131,9 +156,25 @@ If you want Dotenv to overwrite existing environment variables, use `overload`
 instead of `load`:
 
 ```php
-$dotenv = new Dotenv\Dotenv(__DIR__);
+$dotenv = Dotenv\Dotenv::create(__DIR__);
 $dotenv->overload();
 ```
+
+### Loader Customization
+
+Need us to not set `$_ENV` but not `$_SERVER`, or have other custom requirements? No problem! Simply pass a custom implementation of `Dotenv\Environment\FactoryInterface` to `Dotenv\Loader` on construction. In practice, you may not even need a custom implementation, since our default implementation allows you provide an array of `Dotenv\Environment\Adapter\AdapterInterface` for proxing the underlying calls to.
+
+For example, if you want us to only ever fiddle with `$_ENV` and `putenv`, then you can setup Dotenv as follows:
+
+```php
+$factory = new Dotenv\Environment\DotenvFactory([
+    new Dotenv\Environment\Adapter\EnvConstAdapter(),
+    new Dotenv\Environment\Adapter\PutenvAdapter(),
+]);
+
+$dotenv = Dotenv\Dotenv::create(__DIR__, null, $factory);
+```
+
 
 Requiring Variables to be Set
 -----------------------------
@@ -176,7 +217,7 @@ One or more environment variables failed assertions: DATABASE_DSN is empty
 
 ### Integer Variables
 
-You might also need to ensure the the variable is of an integer value. You may do the following:
+You might also need to ensure that the variable is of an integer value. You may do the following:
 
 ```php
 $dotenv->required('FOO')->isInteger();
@@ -186,6 +227,20 @@ If the environment variable is not an integer, you'd get an Exception:
 
 ```
 One or more environment variables failed assertions: FOO is not an integer
+```
+
+### Boolean Variables
+
+You may need to ensure a variable is in the form of a boolean, accepting "On", "1", "Yes", "Off", "0" and "No". You may do the following:
+
+```php
+$dotenv->required('FOO')->isBoolean();
+```
+
+If the environment variable is not a boolean, you'd get an Exception:
+
+```
+One or more environment variables failed assertions: FOO is not a boolean
 ```
 
 ### Allowed Values
